@@ -31,14 +31,8 @@ app.get("/size", async (req, res) => {
             { redirect: "follow" }
         );
 
-        let size = response.headers.get("content-length");
-
-        if (size) {
-            size = Number(size);
-        } else {
-            const buffer = await response.arrayBuffer();
-            size = buffer.byteLength;
-        }
+        const buffer = await response.arrayBuffer();
+        const size = buffer.byteLength;
 
         cache.set(id, size);
 
