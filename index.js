@@ -26,13 +26,22 @@ app.get("/size", async (req, res) => {
     }
 
     try {
-        const response = await fetch(
-            `https://assetdelivery.roblox.com/v1/asset/?id=${id}`,
-            { redirect: "follow" }
-        );
+        const url = `https://assetdelivery.roblox.com/v1/asset/?id=${id}`;
 
-        const buffer = await response.arrayBuffer();
-        const size = buffer.byteLength;
+        const response = await fetch(url, { method: "HEAD", redirect: "follow" });
+
+        const contentLength = response.headers.get("content-length");
+        const contentType = response.headers.get("content-type");
+
+        if (!response.ok || !contentLength || contentType?.includes("application/json")) {
+            return res.json({ success: false });
+        }
+
+        const size = parseInt(contentLength, 10);
+
+        if (size < 100) {
+            return res.json({ success: false });
+        }
 
         cache.set(id, size);
 
