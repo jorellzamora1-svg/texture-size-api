@@ -1,3 +1,5 @@
+const ROBLOX_COOKIE = process.env.ROBLOX_COOKIE;
+
 import express from "express";
 import fetch from "node-fetch";
 
@@ -24,15 +26,21 @@ setInterval(() => {
 // --------------------
 // FETCH WITH TIMEOUT
 // --------------------
-async function fetchWithTimeout(url, options = {}) {
+async function fetchWithAuth(url, options = {}) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), 8000);
 
     try {
         return await fetch(url, {
             ...options,
             signal: controller.signal,
-            redirect: "follow"
+            redirect: "follow",
+            headers: {
+                ...(options.headers || {}),
+                ...(ROBLOX_COOKIE
+                    ? { "Cookie": `.ROBLOSECURITY=${ROBLOX_COOKIE}` }
+                    : {})
+            }
         });
     } finally {
         clearTimeout(timeout);
@@ -59,7 +67,7 @@ function isBadContentType(type) {
 // --------------------
 async function getSizeFromUrl(url) {
     // HEAD first (fast)
-    let res = await fetchWithTimeout(url, { method: "HEAD" });
+    let res = await fetchWithAuth(url, { method: "HEAD" });
 
     let contentLength = res.headers.get("content-length");
     let contentType = res.headers.get("content-type") || "";
@@ -70,7 +78,7 @@ async function getSizeFromUrl(url) {
     }
 
     // fallback GET
-    res = await fetchWithTimeout(url);
+    res = await fetchWithAuth(url);
 
     contentLength = res.headers.get("content-length");
     contentType = res.headers.get("content-type") || "";
@@ -94,9 +102,9 @@ async function getSizeFromUrl(url) {
 // CORE: RESOLVE VIA assetId (BYPASS)
 // --------------------
 async function resolveViaAssetId(id) {
-    const metaRes = await fetchWithTimeout(
-        `https://assetdelivery.roblox.com/v1/assetId/${id}`
-    );
+const metaRes = await fetchWithAuth(
+    `https://assetdelivery.roblox.com/v1/assetId/${id}`
+);
 
     if (!metaRes.ok) return null;
 
@@ -121,7 +129,11 @@ async function resolveViaAsset(id) {
 async function resolveSize(id, attempt = 0) {
     try {
         // 1️⃣ Try bypass method (most reliable)
-        let size = await resolveViaAssetId(id);
+        let size = await resolveViaAssetId(id); // no auth
+
+        if (!size && ROBLOX_COOKIE) {
+            size = await resolveViaAssetId(id, true); // with auth
+        }
 
         if (isValidSize(size)) return size;
 
