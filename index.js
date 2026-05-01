@@ -1,6 +1,8 @@
 import express from "express";
 import fetch from "node-fetch";
-import _sodium from "libsodium-wrappers";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const _sodium = require("libsodium-wrappers");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
