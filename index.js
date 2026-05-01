@@ -45,10 +45,22 @@ setInterval(() => {
 }, CACHE_TTL);
 
 // --------------------
+// FETCH WITH TIMEOUT (no auth, for internal API calls)
+// --------------------
+async function fetchWithTimeout(url, options = {}) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+// --------------------
 // COOKIE ROTATION
 // --------------------
 function extractNewCookie(res) {
-    // node-fetch exposes set-cookie as a raw array
     const raw = res.headers.raw?.()?.["set-cookie"] ?? [];
     const fallback = res.headers.get("set-cookie");
     const all = raw.length ? raw : fallback ? [fallback] : [];
@@ -71,16 +83,16 @@ async function encryptSecret(publicKeyB64, secretValue) {
 
 async function updateGitHubSecret(secretName, secretValue) {
     try {
-        const keyRes = await fetch(
+        const keyRes = await fetchWithTimeout(
             `https://api.github.com/repos/${REPO_NAME}/actions/secrets/public-key`,
-            { headers: { Authorization: `Bearer ${REPO_TOKEN}` }, timeout: 10000 }
+            { headers: { Authorization: `Bearer ${REPO_TOKEN}` } }
         );
         if (!keyRes.ok) throw new Error(`Key fetch failed: ${keyRes.status}`);
         const { key, key_id } = await keyRes.json();
 
         const encryptedValue = await encryptSecret(key, secretValue);
 
-        const putRes = await fetch(
+        const putRes = await fetchWithTimeout(
             `https://api.github.com/repos/${REPO_NAME}/actions/secrets/${secretName}`,
             {
                 method: "PUT",
@@ -88,8 +100,7 @@ async function updateGitHubSecret(secretName, secretValue) {
                     Authorization: `Bearer ${REPO_TOKEN}`,
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ encrypted_value: encryptedValue, key_id }),
-                timeout: 10000
+                body: JSON.stringify({ encrypted_value: encryptedValue, key_id })
             }
         );
         if (!putRes.ok) throw new Error(`Secret update failed: ${putRes.status}`);
@@ -101,7 +112,7 @@ async function updateGitHubSecret(secretName, secretValue) {
 
 async function updateRenderEnv(key, value) {
     try {
-        const res = await fetch(
+        const res = await fetchWithTimeout(
             `https://api.render.com/v1/services/${RENDER_SERVICE_ID}/env-vars`,
             {
                 method: "PUT",
@@ -109,8 +120,7 @@ async function updateRenderEnv(key, value) {
                     Authorization: `Bearer ${RENDER_API_KEY}`,
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify([{ key, value }]),
-                timeout: 10000
+                body: JSON.stringify([{ key, value }])
             }
         );
         if (!res.ok) throw new Error(`Render update failed: ${res.status}`);
