@@ -25,6 +25,19 @@ const TIMEOUT_MS     = 8000;
 const MAX_RETRIES    = 2;
 
 // --------------------
+// AUTH MIDDLEWARE
+// --------------------
+app.use((req, res, next) => {
+    // Allow health checks without auth
+    if (req.path === "/" || req.path === "/ping") return next();
+
+    if (req.headers["x-api-key"] !== process.env.API_KEY) {
+        return res.status(401).json({ error: "Unauthorized" });
+    }
+    next();
+});
+
+// --------------------
 // CACHE CLEANUP
 // --------------------
 setInterval(() => {
